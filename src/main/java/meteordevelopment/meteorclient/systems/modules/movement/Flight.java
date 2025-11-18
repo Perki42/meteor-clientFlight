@@ -5,6 +5,7 @@
 
 package meteordevelopment.meteorclient.systems.modules.movement;
 
+import meteordevelopment.meteorclient.events.meteor.MouseScrollEvent;
 import meteordevelopment.meteorclient.events.packets.PacketEvent;
 import meteordevelopment.meteorclient.events.world.TickEvent;
 import meteordevelopment.meteorclient.mixin.ClientPlayerEntityAccessor;
@@ -14,6 +15,7 @@ import meteordevelopment.meteorclient.systems.modules.Categories;
 import meteordevelopment.meteorclient.systems.modules.Module;
 import meteordevelopment.meteorclient.utils.Utils;
 import meteordevelopment.orbit.EventHandler;
+import meteordevelopment.orbit.EventPriority;
 import net.minecraft.block.AbstractBlock;
 import net.minecraft.entity.Entity;
 import net.minecraft.network.packet.c2s.play.PlayerMoveC2SPacket;
@@ -41,6 +43,16 @@ public class Flight extends Module {
         .description("Your speed when flying.")
         .defaultValue(0.1)
         .min(0.0)
+        .onChanged(aDouble -> speedValue = aDouble)
+        .build()
+    );
+
+    private final Setting<Double> speedScrollSensitivity = sgGeneral.add(new DoubleSetting.Builder()
+        .name("speed-scroll-sensitivity")
+        .description("Allows you to change speed value using scroll wheel. 0 to disable.")
+        .defaultValue(0.0)
+        .min(0.0)
+        .sliderMax(2.0)
         .build()
     );
 
@@ -90,6 +102,7 @@ public class Flight extends Module {
     private boolean flip;
     private float lastYaw;
     private double lastPacketY = Double.MAX_VALUE;
+    private double speedValue;
 
     public Flight() {
         super(Categories.Movement, "flight", "FLYYYY! No Fall is recommended with this module.");
@@ -97,6 +110,8 @@ public class Flight extends Module {
 
     @Override
     public void onActivate() {
+        speedValue = speed.get();
+
         if (mode.get() == Mode.Abilities && !mc.player.isSpectator()) {
             mc.player.getAbilities().flying = true;
             if (mc.player.getAbilities().creativeMode) return;
@@ -159,9 +174,9 @@ public class Flight extends Module {
                 mc.player.setVelocity(0, 0, 0);
                 Vec3d playerVelocity = mc.player.getVelocity();
                 if (mc.options.jumpKey.isPressed())
-                    playerVelocity = playerVelocity.add(0, speed.get() * (verticalSpeedMatch.get() ? 10f : 5f), 0);
+                    playerVelocity = playerVelocity.add(0, speedValue * (verticalSpeedMatch.get() ? 10f : 5f), 0);
                 if (mc.options.sneakKey.isPressed())
-                    playerVelocity = playerVelocity.subtract(0, speed.get() * (verticalSpeedMatch.get() ? 10f : 5f), 0);
+                    playerVelocity = playerVelocity.subtract(0, speedValue * (verticalSpeedMatch.get() ? 10f : 5f), 0);
                 mc.player.setVelocity(playerVelocity);
                 if (noSneak.get()) {
                     mc.player.setOnGround(false);
@@ -169,12 +184,22 @@ public class Flight extends Module {
             }
             case Abilities -> {
                 if (mc.player.isSpectator()) return;
-                mc.player.getAbilities().setFlySpeed(speed.get().floatValue());
+                mc.player.getAbilities().setFlySpeed((float) speedValue);
                 mc.player.getAbilities().flying = true;
                 if (mc.player.getAbilities().creativeMode) return;
                 mc.player.getAbilities().allowFlying = true;
             }
         }
+    }
+
+    @EventHandler(priority = EventPriority.LOW)
+    private void onMouseScroll(MouseScrollEvent event) {
+        if (speedScrollSensitivity.get() <= 0 || mc.currentScreen != null) return;
+
+        speedValue += event.value * 0.25 * (speedScrollSensitivity.get() * speedValue);
+        if (speedValue < 0.01) speedValue = 0.01;
+
+        event.cancel();
     }
 
     private void antiKickPacket(PlayerMoveC2SPacket packet, double currentY) {
@@ -260,7 +285,7 @@ public class Flight extends Module {
         // All the multiplication below is to get the speed to roughly match the speed you get when using vanilla fly
 
         if (!isActive() || mode.get() != Mode.Velocity) return -1;
-        return speed.get().floatValue() * (mc.player.isSprinting() ? 15f : 10f);
+        return (float) speedValue * (mc.player.isSprinting() ? 15f : 10f);
     }
 
     public boolean noSneak() {
