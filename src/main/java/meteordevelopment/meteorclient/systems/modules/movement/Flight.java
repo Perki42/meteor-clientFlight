@@ -6,6 +6,7 @@
 package meteordevelopment.meteorclient.systems.modules.movement;
 
 import meteordevelopment.meteorclient.events.packets.PacketEvent;
+import meteordevelopment.meteorclient.events.meteor.MouseScrollEvent;
 import meteordevelopment.meteorclient.events.world.TickEvent;
 import meteordevelopment.meteorclient.mixin.LocalPlayerAccessor;
 import meteordevelopment.meteorclient.mixin.ServerboundMovePlayerPacketAccessor;
@@ -39,6 +40,15 @@ public class Flight extends Module {
         .description("Your speed when flying.")
         .defaultValue(0.1)
         .min(0.0)
+        .build()
+    );
+
+    private final Setting<Double> speedScrollSensitivity = sgGeneral.add(new DoubleSetting.Builder()
+        .name("speed-scroll-sensitivity")
+        .description("Allows you to change speed value using scroll wheel. 0 to disable.")
+        .defaultValue(0)
+        .min(0)
+        .sliderMax(2)
         .build()
     );
 
@@ -235,6 +245,17 @@ public class Flight extends Module {
         mc.player.getAbilities().invulnerable = packet.isInvulnerable();
         mc.player.getAbilities().instabuild = packet.canInstabuild();
         mc.player.getAbilities().setWalkingSpeed(packet.getWalkingSpeed());
+    }
+
+    @EventHandler
+    private void onMouseScroll(MouseScrollEvent event) {
+        if (speedScrollSensitivity.get() <= 0 || mc.screen != null) return;
+
+        double speedValue = speed.get() + event.value * 0.25 * (speedScrollSensitivity.get() * speed.get());
+        if (speedValue < 0.1) speedValue = 0.1;
+
+        speed.set(speedValue);
+        event.cancel();
     }
 
     private boolean shouldFlyDown(double currentY, double lastY) {
